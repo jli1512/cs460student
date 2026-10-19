@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CS460 Breakout - Magic Edition</title>
+    <!-- Google Font for authentic retro arcade typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        html,
+        body {
+            background-color: #08080f;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden !important;
+            font-family: 'Press Start 2P', monospace, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Ambient retro background glow */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(30, 45, 90, 0.4) 0%, rgba(5, 5, 12, 0.95) 100%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Gameboy Chassis Container (Preserved exact position & background image from 04/index.html) */
+        #gameboy {
+            background: url("https://cs460.org/assignments/breakout/gameboy_bg.jpg") no-repeat center center;
+            background-size: cover;
+            width: 1200px;
+            height: 675px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 100px rgba(0, 255, 128, 0.1);
+            border-radius: 12px;
+            z-index: 10;
+        }
+
+        /* WebGL Canvas (Preserved exact placement from 04/index.html, enhanced with crisp resolution & CRT screen styling) */
+        #c {
+            width: 600px;
+            height: 360px;
+            position: absolute;
+            top: 53%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #000000;
+            cursor: ew-resize;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.9), 0 0 15px rgba(0, 255, 200, 0.15);
+            border-radius: 4px;
+            z-index: 20;
+        }
+
+        /* Subtle scanlines overlay for retro CRT monitor feel */
+        #crt_overlay {
+            width: 600px;
+            height: 360px;
+            position: absolute;
+            top: 53%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 6px 100%;
+            border-radius: 4px;
+            z-index: 25;
+            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.7);
+        }
+
+        /* Top HUD styling (Preserved classes and IDs from 04/index.html with arcade neon polish) */
+        .top_bar {
+            color: #00ff66;
+            font-size: 20px;
+            font-weight: bolder;
+            text-shadow: 0 0 10px rgba(0, 255, 102, 0.8), 0 0 20px rgba(0, 255, 102, 0.4);
+            letter-spacing: 1px;
+            z-index: 30;
+        }
+
+        #score_name {
+            position: absolute;
+            top: 146px;
+            left: 385px;
+        }
+
+        #score {
+            position: absolute;
+            top: 146px;
+            left: 485px;
+            color: #ffffff;
+            text-shadow: 0 0 10px #00ffaa;
+        }
+
+        #lives_name {
+            position: absolute;
+            top: 146px;
+            left: 720px;
+        }
+
+        #lives {
+            position: absolute;
+            top: 146px;
+            left: 815px;
+            color: #ff3366;
+            text-shadow: 0 0 10px #ff3366;
+        }
+
+        /* Enhanced High-Score & Combo HUD additions */
+        #hiscore_name {
+            position: absolute;
+            top: 124px;
+            left: 385px;
+            font-size: 12px;
+            color: #ffaa00;
+            text-shadow: 0 0 8px rgba(255, 170, 0, 0.6);
+        }
+
+        #hiscore {
+            position: absolute;
+            top: 124px;
+            left: 470px;
+            font-size: 12px;
+            color: #ffe680;
+            text-shadow: 0 0 8px rgba(255, 230, 128, 0.6);
+        }
+
+        #combo_badge {
+            position: absolute;
+            top: 124px;
+            left: 720px;
+            font-size: 12px;
+            color: #38bdf8;
+            text-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+            transition: transform 0.1s ease;
+        }
+
+        /* Power LED on Gameboy casing */
+        #power_led {
+            position: absolute;
+            top: 295px;
+            left: 262px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #ff2222;
+            box-shadow: 0 0 12px 3px #ff2222, inset 0 0 3px #fff;
+            z-index: 30;
+            animation: pulseLed 3s infinite ease-in-out;
+        }
+
+        @keyframes pulseLed {
+            0%, 100% { opacity: 0.85; filter: drop-shadow(0 0 4px #f00); }
+            50% { opacity: 1; filter: drop-shadow(0 0 10px #f00); }
+        }
+
+        /* Pause & Sound buttons and indicators */
+        #hud_controls {
+            position: absolute;
+            top: 142px;
+            left: 585px;
+            display: flex;
+            gap: 12px;
+            z-index: 35;
+        }
+
+        .hud_btn {
+            background: rgba(0, 20, 10, 0.8);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            padding: 5px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+            transition: all 0.15s ease;
+        }
+
+        .hud_btn:hover {
+            background: #00ff88;
+            color: #00150a;
+            box-shadow: 0 0 14px rgba(0, 255, 136, 0.7);
+        }
+
+        /* Interactive touch/mouse zones over physical Gameboy buttons */
+        .gb_touch_btn {
+            position: absolute;
+            cursor: pointer;
+            z-index: 35;
+            background: rgba(255, 255, 255, 0.0);
+            border-radius: 50%;
+            transition: background 0.1s ease;
+        }
+
+        .gb_touch_btn:active, .gb_touch_btn.active {
+            background: rgba(0, 255, 150, 0.3);
+            box-shadow: 0 0 15px rgba(0, 255, 150, 0.6);
+        }
+
+        /* Left/Right D-Pad hitboxes */
+        #dpad_left {
+            top: 486px;
+            left: 178px;
+            width: 44px;
+            height: 44px;
+            border-radius: 6px;
+        }
+
+        #dpad_right {
+            top: 486px;
+            left: 252px;
+            width: 44px;
+            height: 44px;
+            border-radius: 6px;
+        }
+
+        /* Overlay & Game Over (Preserved IDs from 04/index.html with high-polish game over card) */
+        #overlay {
+            background-color: rgba(0, 0, 0, 0.82);
+            backdrop-filter: blur(4px);
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            display: none;
+            border-radius: 12px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .result {
+            width: 260px;
+            height: 260px;
+            position: absolute;
+            top: 42%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            border: 3px solid #ff3366;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(255, 51, 102, 0.6);
+        }
+
+        #game_over_card {
+            position: absolute;
+            top: 67%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #ffffff;
+            z-index: 1001;
+            display: none;
+        }
+
+        #game_over_card h2 {
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            color: #ff3366;
+            text-shadow: 0 0 10px #ff3366;
+        }
+
+        #game_over_card p {
+            margin: 6px 0;
+            font-size: 12px;
+            color: #00ffaa;
+            text-shadow: 0 0 6px #00ffaa;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 15px;
+        }
+
+        #restart_btn {
+            margin-top: 16px;
+            background: linear-gradient(135deg, #ff3366, #ff0044);
+            border: none;
+            color: #fff;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.7);
+            transition: all 0.2s ease;
+            animation: pulseBtn 1.5s infinite alternate ease-in-out;
+        }
+
+        #restart_btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(255, 51, 102, 1.0);
+        }
+
+        @keyframes pulseBtn {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.04); }
+        }
+
+        /* Banner banner notification for wave clears / combos */
+        #banner_notify {
+            position: absolute;
+            top: 48%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            color: #ffff00;
+            font-size: 18px;
+            text-shadow: 0 0 15px #ffff00, 0 0 30px #ff8800;
+            z-index: 50;
+            pointer-events: none;
+            transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.3s;
+            opacity: 0;
+            text-align: center;
+        }
+
+        /* Screen shake effect on impacts */
+        .shake {
+            animation: screenShake 0.12s ease-in-out;
+        }
+
+        @keyframes screenShake {
+            0% { transform: translate(-50%, -50%) translate(0, 0); }
+            25% { transform: translate(-50%, -50%) translate(-3px, 2px); }
+            50% { transform: translate(-50%, -50%) translate(3px, -2px); }
+            75% { transform: translate(-50%, -50%) translate(-2px, -1px); }
+            100% { transform: translate(-50%, -50%) translate(0, 0); }
+        }
+
+        /* Instruction footer bar */
+        #instructions {
+            position: absolute;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: #667799;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            letter-spacing: 1px;
+            text-align: center;
+            z-index: 30;
+        }
+    </style>
+
+    <!-- ************************************************************ -->
+    <!-- SHADERS (PRESERVED EXACT SHADER PROGRAM FROM 04/index.html)    -->
+    <!-- ************************************************************ -->
+    <script id="vertexshader" type="glsl">
+      attribute vec3 position;
+
+      uniform mat4 transform;
+
+      void main(void) {
+
+        vec4 final_position = transform * vec4( position, 1.);
+
+        gl_Position = final_position;
+
+        // Ball & particle point size
+        gl_PointSize = 8.0;
+
+      }
+    </script>
+
+    <script id="fragmentshader" type="glsl">
+      precision mediump float;
+
+      uniform vec4 color;
+
+      void main(void) {
+
+        gl_FragColor = color; // vec4(1., 1., 1., 1.);
+
+      }
+    </script>
+
+    <script>
+        // =========================================================================
+        // CS460 BREAKOUT - MAGIC EDITION
+        // =========================================================================
+        // Enhancements & Polish (while strictly preserving WebGL shaders, buffers & drawing):
+        // 1. High-DPI 600x360 WebGL viewport resolution fix (prevents fuzzy canvas stretch).
+        // 2. WebGL Alpha Blending enabled for glowing particles and comet ball trail.
+        // 3. WebGL Particle Explosion System: Burst of shards matching brick colors on destruction.
+        // 4. WebGL Comet Ball Motion Trail: Fading ghost points tracing the ball trajectory.
+        // 5. WebGL Arena Boundary Visuals: Neon glowing top and side border guidelines.
+        // 6. Smooth 60FPS Continuous Movement + Instantaneous backwards-compatible Arrow Keys.
+        // 7. Tactical Paddle Angles: Angled ball bounce based on impact distance from paddle center.
+        // 8. Procedural Web Audio API Synthesizer: 8-bit blips, melodic row chimes, and slide audio.
+        // 9. Combo Multiplier System & High Score LocalStorage persistence.
+        // 10. Juicy Screen Shake and CRT Scanline aesthetics.
+        // 11. Interactive clickable Gameboy D-Pad and Mouse/Touch tracking controls.
+        // 12. Preserved Bonus Features: Paddle scale toggle (1 <-> 0.5), Paddle color cycling,
+        //     and progressive ball speed acceleration.
+        // =========================================================================
+
+        // Global Game State variables (Preserving 04/index.html names)
+        var c, gl, v_shader, f_shader, shaderprogram;
+        var STOPPED = false;
+        var PAUSED = false;
+        var BALLSPEED = 0.02;
+        var PADDLESCALE = 1;
+        var PADDLECOLORS = [
+            [1.0, 0.65, 0.8, 1],
+            [0.8, 0.7, 1.0, 1],
+            [0.65, 0.8, 1.0, 1]
+        ];
+        var PADDLECOLOR = 0;
+        var OBJECTS = [];
+
+        // Additional Polish State variables
+        var PARTICLES = [];             // Dynamic WebGL particle shards
+        var BALL_TRAIL = [];            // Ball trajectory history for WebGL comet effect
+        var HIGH_SCORE = 0;             // High score saved in localStorage
+        var COMBO = 1;                  // Combo multiplier for clearing bricks
+        var WAVE = 1;                   // Board wave counter
+        var BRICKS_DESTROYED = 0;       // Total destroyed bricks
+        var SOUND_MUTED = false;        // Audio state
+        var AUDIO_CTX = null;           // Web Audio API context
+        var PADDLE_VELOCITY = 0;        // Smooth paddle interpolation
+        var KEYS = { ArrowLeft: false, ArrowRight: false, KeyA: false, KeyD: false };
+        var PARTICLE_BUFFER_V = null;   // Reusable WebGL buffer for particle shards
+        var PARTICLE_BUFFER_I = null;
+        var BORDER_OBJECTS = [];        // WebGL arena border lines
+
+        window.onload = function () {
+            //************************************************************//
+            //
+            // INITIALIZE WEBGL & FIX CANVAS INTERNAL RESOLUTION
+            //
+            c = document.getElementById("c");
+            c.width = 600;   // High-DPI crisp buffer matching CSS width
+            c.height = 360;  // High-DPI crisp buffer matching CSS height
+
+            gl = c.getContext("webgl", { alpha: false, antialias: true });
+            if (!gl) {
+                alert("WebGL not supported!");
+                return;
+            }
+            gl.viewport(0, 0, c.width, c.height);
+
+            // Enable WebGL Alpha Blending for particle glows and ball trail
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+            //************************************************************//
+            //
+            // SHADERS (PRESERVED COMPILATION AND LINKING LOGIC)
+            //
+            v_shader = gl.createShader(gl.VERTEX_SHADER);
+            f_shader = gl.createShader(gl.FRAGMENT_SHADER);
+
+            gl.shaderSource(
+                v_shader,
+                document.getElementById("vertexshader").innerText
+            );
+            gl.compileShader(v_shader);
+            if (!gl.getShaderParameter(v_shader, gl.COMPILE_STATUS)) {
+                console.log(gl.getShaderInfoLog(v_shader));
+            } else {
+                console.log("Vertex Shader compiled!");
+            }
+
+            gl.shaderSource(
+                f_shader,
+                document.getElementById("fragmentshader").innerText
+            );
+            gl.compileShader(f_shader);
+            if (!gl.getShaderParameter(f_shader, gl.COMPILE_STATUS)) {
+                console.log(gl.getShaderInfoLog(f_shader));
+            } else {
+                console.log("Fragment Shader compiled!");
+            }
+
+            shaderprogram = gl.createProgram();
+            gl.attachShader(shaderprogram, v_shader);
+            gl.attachShader(shaderprogram, f_shader);
+            gl.linkProgram(shaderprogram);
+            gl.useProgram(shaderprogram);
+
+            // Load saved High Score from localStorage
+            var savedHighScore = localStorage.getItem("cs460_breakout_highscore");
+            if (savedHighScore) {
+                HIGH_SCORE = parseInt(savedHighScore) || 0;
+                document.getElementById("hiscore").innerText = HIGH_SCORE;
+            }
+
+            // Initialize WebGL buffers for particle system
+            initParticleBuffers();
+
+            // Initialize WebGL neon arena borders
+            initArenaBorders();
+
+            // Create initial scene objects (OBJECTS[0] = Paddle, OBJECTS[1] = Ball, OBJECTS[2..] = Bricks)
+            OBJECTS = [];
+            OBJECTS.push(createPaddle(PADDLECOLORS[PADDLECOLOR], [0, -0.9, 0])); // BOTTOM PADDLE
+            OBJECTS.push(createBall([1, 1, 1, 1], [0, 0, 0]));                  // BALL
+            createBricks();                                                      // ADD BRICKS
+
+            resetBall();
+
+            // Setup mouse & touch movement for paddle
+            setupInteractiveControls();
+
+            // Start main render and game loop
+            animate();
+        };
+
+        //************************************************************//
+        //
+        // CREATE GEOMETRY (PRESERVED BUFFERS AND VERTICES FROM 04/index.html)
+        //
+        function createPaddle(color, offset) {
+            var vertices = new Float32Array([
+                -0.1,  0.05, 0.0, // V0
+                -0.1, -0.05, 0.0, // V1, V4
+                 0.1,  0.05, 0.0, // V2, V3
+                 0.1, -0.05, 0.0  // V5
+            ]);
+
+            var indices = new Uint8Array([
+                0, 1, 2, // Triangle 1
+                2, 1, 3  // Triangle 2
+            ]);
+
+            var v_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, v_buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            var i_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, i_buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return [v_buffer, i_buffer, color, offset, 6, gl.TRIANGLES];
+        }
+
+        function createBall(color, offset) {
+            var vertices = new Float32Array([
+                0.0, 0.0, 0.0
+            ]);
+
+            var indices = new Uint8Array([0]);
+
+            var v_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, v_buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            var i_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, i_buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return [v_buffer, i_buffer, color, offset, 1, gl.POINTS];
+        }
+
+        function createBrick(color, offset, score) {
+            var vertices = new Float32Array([
+                -0.095,  0.05, 0.0, // V0
+                -0.095, -0.05, 0.0, // V1, V4
+                 0.095,  0.05, 0.0, // V2, V3
+                 0.095, -0.05, 0.0  // V5
+            ]);
+
+            var indices = new Uint8Array([
+                0, 1, 2, // Triangle 1
+                2, 1, 3  // Triangle 2
+            ]);
+
+            var v_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, v_buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            var i_buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, i_buffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+            return [v_buffer, i_buffer, color, offset, 6, gl.TRIANGLES, score];
+        }
+
+        function createBricks() {
+            var offset_x = -0.8;
+            var offset_y = 0.9;
+            var colors = [
+                [1.0, 0.15, 0.25, 1.0], // Row 0: Red (6 pts)
+                [1.0, 0.65, 0.00, 1.0], // Row 1: Orange/Yellow (5 pts)
+                [0.10, 0.95, 0.35, 1.0], // Row 2: Green (4 pts)
+                [0.15, 0.55, 1.00, 1.0], // Row 3: Blue (3 pts)
+                [0.85, 0.25, 1.00, 1.0], // Row 4: Magenta (2 pts)
+                [0.05, 0.85, 0.95, 1.0]  // Row 5: Cyan (1 pt)
+            ];
+
+            for (let i = 0; i < 6; i++) {
+                for (let j = 0; j < 9; j++) {
+                    OBJECTS.push(createBrick(colors[i], [offset_x, offset_y, 0], 6 - i));
+                    offset_x += 0.2;
+                }
+                offset_x = -0.8;
+                offset_y -= 0.14;
+            }
+        }
+
+        //************************************************************//
+        //
+        // WEBGL PARTICLE SYSTEM BUFFERS & ARENA BORDER INITIALIZATION
+        //
+        function initParticleBuffers() {
+            // Reusable quad buffer for particle sparks and debris
+            var particleVertices = new Float32Array([
+                -0.012,  0.012, 0.0,
+                -0.012, -0.012, 0.0,
+                 0.012,  0.012, 0.0,
+                 0.012, -0.012, 0.0
+            ]);
+            var particleIndices = new Uint8Array([0, 1, 2, 2, 1, 3]);
+
+            PARTICLE_BUFFER_V = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, PARTICLE_BUFFER_V);
+            gl.bufferData(gl.ARRAY_BUFFER, particleVertices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            PARTICLE_BUFFER_I = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, PARTICLE_BUFFER_I);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, particleIndices, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        }
+
+        function initArenaBorders() {
+            // Glowing neon boundary guidelines for Top, Left, and Right walls
+            BORDER_OBJECTS = [];
+
+            // Top boundary border line
+            var topVerts = new Float32Array([
+                -0.98,  0.98, 0.0,
+                 0.98,  0.98, 0.0
+            ]);
+            var topInds = new Uint8Array([0, 1]);
+            var tvb = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, tvb);
+            gl.bufferData(gl.ARRAY_BUFFER, topVerts, gl.STATIC_DRAW);
+            var tib = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tib);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, topInds, gl.STATIC_DRAW);
+            BORDER_OBJECTS.push([tvb, tib, [0.0, 0.9, 1.0, 0.35], [0, 0, 0], 2, gl.LINES]);
+
+            // Left boundary border line
+            var leftVerts = new Float32Array([
+                -0.98, -0.98, 0.0,
+                -0.98,  0.98, 0.0
+            ]);
+            var leftInds = new Uint8Array([0, 1]);
+            var lvb = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, lvb);
+            gl.bufferData(gl.ARRAY_BUFFER, leftVerts, gl.STATIC_DRAW);
+            var lib = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, lib);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, leftInds, gl.STATIC_DRAW);
+            BORDER_OBJECTS.push([lvb, lib, [0.0, 0.9, 1.0, 0.35], [0, 0, 0], 2, gl.LINES]);
+
+            // Right boundary border line
+            var rightVerts = new Float32Array([
+                 0.98, -0.98, 0.0,
+                 0.98,  0.98, 0.0
+            ]);
+            var rightInds = new Uint8Array([0, 1]);
+            var rvb = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, rvb);
+            gl.bufferData(gl.ARRAY_BUFFER, rightVerts, gl.STATIC_DRAW);
+            var rib = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, rib);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, rightInds, gl.STATIC_DRAW);
+            BORDER_OBJECTS.push([rvb, rib, [0.0, 0.9, 1.0, 0.35], [0, 0, 0], 2, gl.LINES]);
+        }
+
+        // Spawn explosion of WebGL particles on brick destruction
+        function spawnBrickExplosion(x, y, color) {
+            var count = 22;
+            for (let i = 0; i < count; i++) {
+                let angle = Math.random() * Math.PI * 2;
+                let speed = 0.006 + Math.random() * 0.018;
+                PARTICLES.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    scale: 0.6 + Math.random() * 0.8,
+                    color: [color[0], color[1], color[2], 1.0],
+                    life: 1.0,
+                    decay: 0.02 + Math.random() * 0.02
+                });
+            }
+        }
+
+        // Spawn upward spark particles on paddle bounce
+        function spawnPaddleSparks(x, y) {
+            for (let i = 0; i < 14; i++) {
+                let angle = (Math.PI / 2) + (Math.random() - 0.5) * 1.4;
+                let speed = 0.008 + Math.random() * 0.016;
+                PARTICLES.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    scale: 0.5 + Math.random() * 0.5,
+                    color: [0.2, 1.0, 0.8, 1.0],
+                    life: 1.0,
+                    decay: 0.035 + Math.random() * 0.02
+                });
+            }
+        }
+
+        //************************************************************//
+        //
+        // PROCEDURAL WEB AUDIO SYNTHESIZER (8-BIT RETRO SOUND FX)
+        // Zero external audio files required - works instantly everywhere!
+        //
+        function initAudio() {
+            if (!AUDIO_CTX) {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    AUDIO_CTX = new AudioContext();
+                }
+            }
+            if (AUDIO_CTX && AUDIO_CTX.state === 'suspended') {
+                AUDIO_CTX.resume();
+            }
+        }
+
+        function playSoundTone(freq, duration, type, startGain, endGain) {
+            if (SOUND_MUTED || !AUDIO_CTX) return;
+            try {
+                var osc = AUDIO_CTX.createOscillator();
+                var gain = AUDIO_CTX.createGain();
+                osc.type = type || 'sine';
+                osc.frequency.setValueAtTime(freq, AUDIO_CTX.currentTime);
+                gain.gain.setValueAtTime(startGain !== undefined ? startGain : 0.15, AUDIO_CTX.currentTime);
+                gain.gain.exponentialRampToValueAtTime(endGain !== undefined ? endGain : 0.001, AUDIO_CTX.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(AUDIO_CTX.destination);
+                osc.start();
+                osc.stop(AUDIO_CTX.currentTime + duration);
+            } catch (e) {
+                // Audio context handling
+            }
+        }
+
+        function playPaddleHitSound() {
+            playSoundTone(220, 0.08, 'square', 0.18, 0.001);
+        }
+
+        function playBrickHitSound(scoreVal) {
+            // Melodic pentatonic notes corresponding to brick row
+            var freqs = [392, 440, 523, 659, 784, 880, 1046];
+            var f = freqs[scoreVal] || 523;
+            playSoundTone(f, 0.12, 'triangle', 0.22, 0.001);
+        }
+
+        function playWallHitSound() {
+            playSoundTone(340, 0.05, 'sine', 0.08, 0.001);
+        }
+
+        function playLifeLostSound() {
+            if (SOUND_MUTED || !AUDIO_CTX) return;
+            try {
+                var osc = AUDIO_CTX.createOscillator();
+                var gain = AUDIO_CTX.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(320, AUDIO_CTX.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, AUDIO_CTX.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.2, AUDIO_CTX.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, AUDIO_CTX.currentTime + 0.4);
+                osc.connect(gain);
+                gain.connect(AUDIO_CTX.destination);
+                osc.start();
+                osc.stop(AUDIO_CTX.currentTime + 0.4);
+            } catch (e) {}
+        }
+
+        function playVictorySound() {
+            var notes = [523, 659, 784, 1046];
+            notes.forEach((freq, idx) => {
+                setTimeout(() => {
+                    playSoundTone(freq, 0.18, 'triangle', 0.25, 0.001);
+                }, idx * 110);
+            });
+        }
+
+        // Visual screen impact shake
+        function triggerScreenShake() {
+            var canvasElem = document.getElementById("c");
+            canvasElem.classList.remove("shake");
+            void canvasElem.offsetWidth; // Force CSS reflow
+            canvasElem.classList.add("shake");
+        }
+
+        // Show banner notifications (Wave Clear, Combo!)
+        function showBanner(text, color) {
+            var banner = document.getElementById("banner_notify");
+            banner.innerText = text;
+            banner.style.color = color || "#ffff00";
+            banner.style.opacity = "1";
+            banner.style.transform = "translate(-50%, -50%) scale(1.15)";
+            setTimeout(() => {
+                banner.style.transform = "translate(-50%, -50%) scale(1.0)";
+            }, 100);
+            setTimeout(() => {
+                banner.style.opacity = "0";
+                banner.style.transform = "translate(-50%, -50%) scale(0.6)";
+            }, 1200);
+        }
+
+        //************************************************************//
+        //
+        // MAIN ANIMATION LOOP
+        //
+        function animate() {
+            if (STOPPED) {
+                return;
+            }
+
+            requestAnimationFrame(animate);
+
+            if (PAUSED) {
+                return;
+            }
+
+            // Smooth 60FPS keyboard paddle interpolation
+            if (KEYS.ArrowLeft || KEYS.KeyA) {
+                OBJECTS[0][3][0] -= 0.022;
+                if (OBJECTS[0][3][0] < -0.9) OBJECTS[0][3][0] = -0.9;
+            }
+            if (KEYS.ArrowRight || KEYS.KeyD) {
+                OBJECTS[0][3][0] += 0.022;
+                if (OBJECTS[0][3][0] > 0.9) OBJECTS[0][3][0] = 0.9;
+            }
+
+            // CLEAR NOW BEFORE ANY DRAWING
+            gl.clearColor(0.01, 0.01, 0.03, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Update Ball physics & collisions
+            updateBall();
+
+            // Locate shader program uniforms and attributes
+            var a_position = gl.getAttribLocation(shaderprogram, "position");
+            var u_color = gl.getUniformLocation(shaderprogram, "color");
+            var u_transform = gl.getUniformLocation(shaderprogram, "transform");
+
+            // ------------------------------------------------------------------
+            // 1. DRAW WEBGL ARENA BOUNDARY GUIDELINES
+            // ------------------------------------------------------------------
+            for (var b = 0; b < BORDER_OBJECTS.length; b++) {
+                var border = BORDER_OBJECTS[b];
+                gl.bindBuffer(gl.ARRAY_BUFFER, border[0]);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, border[1]);
+                gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(a_position);
+                gl.uniform4fv(u_color, new Float32Array(border[2]));
+
+                var b_transform = new Float32Array([
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    0, 0, 0, 1
+                ]);
+                gl.uniformMatrix4fv(u_transform, false, b_transform);
+                gl.drawElements(border[5], border[4], gl.UNSIGNED_BYTE, 0);
+            }
+
+            // ------------------------------------------------------------------
+            // 2. DRAW WEBGL BALL COMET MOTION TRAIL
+            // ------------------------------------------------------------------
+            if (OBJECTS.length > 1 && OBJECTS[1]) {
+                var ball_v = OBJECTS[1][0];
+                var ball_i = OBJECTS[1][1];
+                gl.bindBuffer(gl.ARRAY_BUFFER, ball_v);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ball_i);
+                gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(a_position);
+
+                for (var t = 0; t < BALL_TRAIL.length; t++) {
+                    var trailPt = BALL_TRAIL[t];
+                    var alpha = (t + 1) / (BALL_TRAIL.length + 1) * 0.45;
+                    gl.uniform4fv(u_color, new Float32Array([0.2, 0.9, 1.0, alpha]));
+
+                    var t_transform = new Float32Array([
+                        1, 0, 0, 0,
+                        0, 1, 0, 0,
+                        0, 0, 1, 0,
+                        trailPt[0], trailPt[1], 0, 1
+                    ]);
+                    gl.uniformMatrix4fv(u_transform, false, t_transform);
+                    gl.drawElements(gl.POINTS, 1, gl.UNSIGNED_BYTE, 0);
+                }
+            }
+
+            // ------------------------------------------------------------------
+            // 3. DRAW WEBGL PARTICLE EXPLOSIONS
+            // ------------------------------------------------------------------
+            if (PARTICLES.length > 0 && PARTICLE_BUFFER_V) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, PARTICLE_BUFFER_V);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, PARTICLE_BUFFER_I);
+                gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(a_position);
+
+                for (var p = PARTICLES.length - 1; p >= 0; p--) {
+                    var pt = PARTICLES[p];
+                    pt.x += pt.vx;
+                    pt.y += pt.vy;
+                    pt.life -= pt.decay;
+
+                    if (pt.life <= 0) {
+                        PARTICLES.splice(p, 1);
+                        continue;
+                    }
+
+                    var p_color = [pt.color[0], pt.color[1], pt.color[2], pt.life * pt.color[3]];
+                    gl.uniform4fv(u_color, new Float32Array(p_color));
+
+                    var p_scale = pt.scale * Math.max(0.1, pt.life);
+                    var p_transform = new Float32Array([
+                        p_scale, 0, 0, 0,
+                        0, p_scale, 0, 0,
+                        0, 0, 1, 0,
+                        pt.x, pt.y, 0, 1
+                    ]);
+                    gl.uniformMatrix4fv(u_transform, false, p_transform);
+                    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_BYTE, 0);
+                }
+            }
+
+            // ------------------------------------------------------------------
+            // 4. DRAW STANDARD OBJECTS (PADDLE, BALL, BRICKS)
+            // (PRESERVED EXACT DRAWING PIPELINE FROM 04/index.html)
+            // ------------------------------------------------------------------
+            for (var o = 0; o < OBJECTS.length; o++) {
+                var current = OBJECTS[o];
+
+                var v_buffer = current[0];
+                var i_buffer = current[1];
+                var COLOR = current[2];
+                var OFFSET = current[3];
+                var VERTEXCOUNT = current[4];
+                var PRIMITIVE = current[5];
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, v_buffer);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, i_buffer);
+
+                gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(a_position);
+
+                gl.uniform4fv(u_color, new Float32Array(COLOR));
+
+                current_transform = new Float32Array([
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    OFFSET[0], OFFSET[1], 0, 1,
+                ]);
+
+                if (o == 0) {
+                    current_transform[0] = PADDLESCALE;
+                }
+
+                gl.uniformMatrix4fv(u_transform, false, current_transform);
+
+                gl.drawElements(PRIMITIVE, VERTEXCOUNT, gl.UNSIGNED_BYTE, 0);
+            }
+        }
+
+        function resetBall() {
+            OBJECTS[1][3][0] = Math.random() / 10; // SET TO CENTER
+            OBJECTS[1][3][1] = Math.random() / 10;
+
+            BALLDIRECTION = Math.PI / 8 + Math.random();
+            BALLDIRECTION *= -1;
+
+            BALL_TRAIL = [];
+            COMBO = 1;
+            updateComboDisplay();
+        }
+
+        function score(score_value) {
+            // Calculate score with combo multiplier
+            var pointsEarned = score_value * COMBO;
+            var old_score = document.getElementById("score").innerText;
+            var newScore = parseInt(old_score) + pointsEarned;
+            document.getElementById("score").innerText = newScore;
+
+            BRICKS_DESTROYED++;
+
+            // Update High Score if beaten
+            if (newScore > HIGH_SCORE) {
+                HIGH_SCORE = newScore;
+                document.getElementById("hiscore").innerText = HIGH_SCORE;
+                localStorage.setItem("cs460_breakout_highscore", HIGH_SCORE);
+            }
+
+            // Preserved exact condition from 04/index.html: If all bricks destroyed, regenerate
+            if (OBJECTS.length == 2) {
+                WAVE++;
+                playVictorySound();
+                showBanner("STAGE " + WAVE + " CLEARED!", "#00ffaa");
+                createBricks();
+                resetBall();
+            }
+        }
+
+        function updateComboDisplay() {
+            var badge = document.getElementById("combo_badge");
+            if (COMBO > 1) {
+                badge.innerText = "COMBO x" + COMBO;
+                badge.style.color = COMBO >= 4 ? "#ff0077" : (COMBO >= 2 ? "#ffff00" : "#38bdf8");
+                badge.style.transform = "scale(1.2)";
+                setTimeout(() => { badge.style.transform = "scale(1.0)"; }, 120);
+            } else {
+                badge.innerText = "COMBO x1";
+                badge.style.color = "#38bdf8";
+            }
+        }
+
+        function loseLife() {
+            playLifeLostSound();
+            triggerScreenShake();
+            COMBO = 1;
+            updateComboDisplay();
+
+            var old_life = document.getElementById("lives").innerText;
+            var newLife = parseInt(old_life) - 1;
+            document.getElementById("lives").innerText = newLife;
+
+            if (old_life == 1) {
+                STOPPED = true;
+                document.getElementById("overlay").style.display = "block";
+                document.getElementById("game_over").style.display = "block";
+
+                // Populate game over stats card
+                var finalScore = document.getElementById("score").innerText;
+                document.getElementById("final_score_val").innerText = finalScore;
+                document.getElementById("final_hiscore_val").innerText = HIGH_SCORE;
+                document.getElementById("final_bricks_val").innerText = BRICKS_DESTROYED;
+                document.getElementById("game_over_card").style.display = "block";
+            }
+        }
+
+        function updateBall() {
+            BALL_X = OBJECTS[1][3][0];
+            BALL_Y = OBJECTS[1][3][1];
+
+            BOTTOM_PADDLE_X = OBJECTS[0][3][0];
+            BOTTOM_PADDLE_Y = OBJECTS[0][3][1];
+            BOTTOM_PADDLE_WIDTH = 0.2 * PADDLESCALE;
+
+            // Record trail position for WebGL comet motion effect
+            BALL_TRAIL.push([BALL_X, BALL_Y]);
+            if (BALL_TRAIL.length > 10) {
+                BALL_TRAIL.shift();
+            }
+
+            // Wall Collisions
+            if (BALL_X >= 0.95) {
+                // RIGHT WALL
+                BALLDIRECTION = Math.PI - BALLDIRECTION;
+                playWallHitSound();
+            } else if (BALL_X <= -0.95) {
+                // LEFT WALL
+                BALLDIRECTION = Math.PI - BALLDIRECTION;
+                playWallHitSound();
+            } else if (BALL_Y >= 0.96) {
+                // TOP WALL
+                BALLDIRECTION = -Math.abs(BALLDIRECTION);
+                playWallHitSound();
+            } else if (BALL_Y >= 0.1) {
+                // TOP BRICKS COLLISION
+                for (let i = 2; i < OBJECTS.length; i++) {
+                    BRICK_OFFSET_X = OBJECTS[i][3][0];
+                    BRICK_OFFSET_Y = OBJECTS[i][3][1];
+                    if (BALL_X > BRICK_OFFSET_X - 0.095 &&
+                        BALL_X < BRICK_OFFSET_X + 0.095 &&
+                        BALL_Y > BRICK_OFFSET_Y - 0.05 &&
+                        BALL_Y < BRICK_OFFSET_Y + 0.05) {
+
+                        // Reflect vertically or horizontally depending on hit angle
+                        var overlapX = 0.095 - Math.abs(BALL_X - BRICK_OFFSET_X);
+                        var overlapY = 0.05 - Math.abs(BALL_Y - BRICK_OFFSET_Y);
+                        if (overlapX < overlapY * 0.7) {
+                            BALLDIRECTION = Math.PI - BALLDIRECTION;
+                        } else {
+                            BALLDIRECTION = -BALLDIRECTION;
+                        }
+
+                        score_num = OBJECTS[i][6];
+                        var brickColor = OBJECTS[i][2];
+
+                        // WebGL particle shard burst & audio chime
+                        spawnBrickExplosion(BRICK_OFFSET_X, BRICK_OFFSET_Y, brickColor);
+                        playBrickHitSound(score_num);
+                        triggerScreenShake();
+
+                        // Increment combo
+                        COMBO++;
+                        updateComboDisplay();
+
+                        OBJECTS.splice(i, 1);
+                        score(score_num);
+                        break; // Exit loop after splicing to maintain index consistency
+                    }
+                }
+            } else if (BALL_Y <= -0.85) {
+                // BOTTOM PADDLE CHECK
+                BOTTOM_PADDLE_LEFT = BOTTOM_PADDLE_X - BOTTOM_PADDLE_WIDTH / 2;
+                BOTTOM_PADDLE_RIGHT = BOTTOM_PADDLE_X + BOTTOM_PADDLE_WIDTH / 2;
+
+                if (BALL_X >= BOTTOM_PADDLE_LEFT && BALL_X <= BOTTOM_PADDLE_RIGHT) {
+                    // TACTICAL PADDLE ANGLE: Bounce angle depends on where ball hits the paddle
+                    var hitOffset = (BALL_X - BOTTOM_PADDLE_X) / (BOTTOM_PADDLE_WIDTH / 2);
+                    hitOffset = Math.max(-0.9, Math.min(0.9, hitOffset));
+
+                    // Base angle upward is Math.PI/2 (90 deg), angled left/right by hitOffset
+                    BALLDIRECTION = (Math.PI / 2) - (hitOffset * (Math.PI / 3.3));
+
+                    // Prevent ball from re-triggering while near paddle
+                    OBJECTS[1][3][1] = -0.84;
+
+                    // Reset combo on paddle bounce
+                    COMBO = 1;
+                    updateComboDisplay();
+
+                    // Sound & sparks
+                    playPaddleHitSound();
+                    spawnPaddleSparks(BALL_X, -0.85);
+
+                    // BONUS FEATURE 1: Alternate paddle scale between 1 and 0.5
+                    if (PADDLESCALE == 1) {
+                        PADDLESCALE = 0.5;
+                    } else {
+                        PADDLESCALE = 1;
+                    }
+
+                    // BONUS FEATURE 2: Cycle paddle colors on bounce
+                    PADDLECOLOR += 1;
+                    if (PADDLECOLOR == PADDLECOLORS.length) {
+                        PADDLECOLOR = 0;
+                    }
+                    OBJECTS[0][2] = PADDLECOLORS[PADDLECOLOR];
+                } else if (BALL_Y <= -0.96) {
+                    // Ball fell below paddle: LOSE LIFE
+                    loseLife();
+                    resetBall();
+                    return;
+                }
+            }
+
+            // BONUS FEATURE 3: Gradually increase ball speed over time
+            if (BALLSPEED < 0.04) {
+                BALLSPEED += 0.00001;
+            }
+
+            // UPDATE BALL POSITION
+            OBJECTS[1][3][0] += Math.cos(BALLDIRECTION) * BALLSPEED;
+            OBJECTS[1][3][1] += Math.sin(BALLDIRECTION) * BALLSPEED;
+        }
+
+        //************************************************************//
+        //
+        // USER INPUT HANDLING (KEYBOARD, MOUSE, TOUCH, GAMEBOY BUTTONS)
+        //
+        window.onkeydown = function (e) {
+            initAudio();
+
+            if (STOPPED) {
+                // Restart game on keydown (Preserved behavior from 04/index.html)
+                window.location.reload();
+                return;
+            }
+
+            // Pause toggle
+            if (e.key === 'p' || e.key === 'P' || e.key === ' ') {
+                togglePause();
+                return;
+            }
+
+            // Audio mute toggle
+            if (e.key === 'm' || e.key === 'M') {
+                toggleSound();
+                return;
+            }
+
+            // Instantaneous discrete step (Preserved exact backwards compatibility with 04/index.html)
+            if (e.key === 'ArrowLeft') {
+                KEYS.ArrowLeft = true;
+                OBJECTS[0][3][0] -= 0.1;
+                if (OBJECTS[0][3][0] < -0.9) OBJECTS[0][3][0] = -0.9;
+            }
+            if (e.key === 'ArrowRight') {
+                KEYS.ArrowRight = true;
+                OBJECTS[0][3][0] += 0.1;
+                if (OBJECTS[0][3][0] > 0.9) OBJECTS[0][3][0] = 0.9;
+            }
+
+            if (e.code === 'KeyA') KEYS.KeyA = true;
+            if (e.code === 'KeyD') KEYS.KeyD = true;
+        };
+
+        window.onkeyup = function (e) {
+            if (e.key === 'ArrowLeft') KEYS.ArrowLeft = false;
+            if (e.key === 'ArrowRight') KEYS.ArrowRight = false;
+            if (e.code === 'KeyA') KEYS.KeyA = false;
+            if (e.code === 'KeyD') KEYS.KeyD = false;
+        };
+
+        function setupInteractiveControls() {
+            // Mouse tracking on canvas
+            c.addEventListener('mousemove', function (e) {
+                initAudio();
+                if (STOPPED || PAUSED) return;
+                var rect = c.getBoundingClientRect();
+                var normX = (e.clientX - rect.left) / rect.width; // 0.0 to 1.0
+                var glX = (normX * 2.0) - 1.0;                    // -1.0 to 1.0
+                OBJECTS[0][3][0] = Math.max(-0.9, Math.min(0.9, glX));
+            });
+
+            // Touch tracking on canvas
+            c.addEventListener('touchmove', function (e) {
+                initAudio();
+                if (STOPPED || PAUSED) return;
+                if (e.touches.length > 0) {
+                    var rect = c.getBoundingClientRect();
+                    var normX = (e.touches[0].clientX - rect.left) / rect.width;
+                    var glX = (normX * 2.0) - 1.0;
+                    OBJECTS[0][3][0] = Math.max(-0.9, Math.min(0.9, glX));
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            // Interactive Gameboy D-Pad Left
+            var dLeft = document.getElementById("dpad_left");
+            dLeft.addEventListener('mousedown', function () {
+                initAudio();
+                KEYS.ArrowLeft = true;
+                dLeft.classList.add("active");
+            });
+            window.addEventListener('mouseup', function () {
+                KEYS.ArrowLeft = false;
+                dLeft.classList.remove("active");
+            });
+
+            // Interactive Gameboy D-Pad Right
+            var dRight = document.getElementById("dpad_right");
+            dRight.addEventListener('mousedown', function () {
+                initAudio();
+                KEYS.ArrowRight = true;
+                dRight.classList.add("active");
+            });
+            window.addEventListener('mouseup', function () {
+                KEYS.ArrowRight = false;
+                dRight.classList.remove("active");
+            });
+        }
+
+        function togglePause() {
+            if (STOPPED) return;
+            PAUSED = !PAUSED;
+            var pauseBtn = document.getElementById("pause_btn");
+            if (PAUSED) {
+                pauseBtn.innerText = "RESUME";
+                showBanner("PAUSED", "#ffff00");
+            } else {
+                pauseBtn.innerText = "PAUSE";
+                showBanner("RESUMED", "#00ffaa");
+            }
+        }
+
+        function toggleSound() {
+            initAudio();
+            SOUND_MUTED = !SOUND_MUTED;
+            document.getElementById("sound_btn").innerText = SOUND_MUTED ? "SFX: OFF" : "SFX: ON";
+        }
+
+        function restartGame() {
+            window.location.reload();
+        }
+    </script>
+</head>
+
+<body>
+    <!-- Main Gameboy Chassis -->
+    <div id="gameboy">
+        <!-- Preserved HUD elements and class names from 04/index.html -->
+        <span id="score_name" class="top_bar">SCORE:</span>
+        <span id="score" class="top_bar">0</span>
+
+        <span id="lives_name" class="top_bar">LIVES:</span>
+        <span id="lives" class="top_bar">3</span>
+
+        <!-- Enhanced HUD Stats: High Score & Combo multiplier -->
+        <span id="hiscore_name">HI:</span>
+        <span id="hiscore">0</span>
+        <span id="combo_badge">COMBO x1</span>
+
+        <!-- Top Bar Action Buttons -->
+        <div id="hud_controls">
+            <button id="pause_btn" class="hud_btn" onclick="togglePause()">PAUSE</button>
+            <button id="sound_btn" class="hud_btn" onclick="toggleSound()">SFX: ON</button>
+        </div>
+
+        <!-- Power LED indicator -->
+        <div id="power_led" title="GameBoy Power"></div>
+
+        <!-- Interactive touch/mouse zones for D-Pad Left/Right -->
+        <div id="dpad_left" class="gb_touch_btn" title="Move Left"></div>
+        <div id="dpad_right" class="gb_touch_btn" title="Move Right"></div>
+
+        <!-- Preserved Overlay and Game Over image from 04/index.html -->
+        <div id="overlay">
+            <img id="game_over" class="result" src="https://cs460.org/assignments/breakout/game_over.jpg" alt="Game Over" />
+
+            <!-- Polished Game Over Summary Card -->
+            <div id="game_over_card">
+                <h2>GAME OVER</h2>
+                <p>FINAL SCORE: <span id="final_score_val">0</span></p>
+                <p>HIGH SCORE: <span id="final_hiscore_val">0</span></p>
+                <p>BRICKS BROKEN: <span id="final_bricks_val">0</span></p>
+                <button id="restart_btn" onclick="restartGame()">PLAY AGAIN</button>
+            </div>
+        </div>
+
+        <!-- WebGL Screen Canvas -->
+        <canvas id="c" width="600" height="360"></canvas>
+
+        <!-- Subtle CRT scanline and glare overlay -->
+        <div id="crt_overlay"></div>
+
+        <!-- Dynamic Banner Notification -->
+        <div id="banner_notify"></div>
+    </div>
+
+    <!-- Instruction Footer -->
+    <div id="instructions">
+        <span>[ARROW KEYS / A-D] MOVE PADDLE &bull; [MOUSE] DIRECT CONTROL &bull; [P / SPACE] PAUSE &bull; [M] MUTE</span>
+    </div>
+</body>
+
+</html>
